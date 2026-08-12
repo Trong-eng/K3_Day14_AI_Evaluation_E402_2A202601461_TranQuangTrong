@@ -30,11 +30,11 @@ critical.
 
 | Metric | Acceptable Low Score Scenario | Critical Low Score Scenario | Action Required |
 |---|---|---|---|
-| Faithfulness | | | |
-| Answer Relevance | | | |
-| Context Recall | | | |
-| Context Precision | | | |
-| Completeness | | | |
+| Faithfulness | Có thể thấp trong câu trả lời từ chối một câu hỏi ngoài scope hoặc câu hỏi mơ hồ cần chuyển đến đúng văn phòng; khi đó phải kiểm tra failure type thay vì kết luận ngay là hallucination. | Câu trả lời chứa policy, ngày, khoản phí hoặc điều kiện không xuất hiện trong context; đặc biệt nghiêm trọng với học phí, học bổng, deadline và quyền riêng tư. | Kiểm tra claim không có evidence, tăng grounding guardrail/citation, và human-review các case rủi ro cao. Nếu retrieval tốt mà score vẫn thấp thì ưu tiên sửa prompt/generator. |
+| Answer Relevance | Có thể thấp khi người dùng hỏi quá mơ hồ hoặc ngoài scope và assistant trả lời giới hạn scope một cách an toàn; cũng cần lưu ý heuristic word-overlap có thể phạt paraphrase. | Câu trả lời đi sang chủ đề khác, không giải quyết intent chính, hoặc trả lời một câu hỏi khác dù context đúng. | Kiểm tra intent routing và question-answer overlap; sửa prompt/routing, thêm query paraphrase và test các câu hỏi mơ hồ. |
+| Context Recall | Có thể thấp do expected answer dùng từ khác với retrieved chunk nhưng chunk vẫn chứa đủ ý nghĩa; cần kiểm tra thủ công vì đây là heuristic lexical. | Retriever bỏ sót evidence bắt buộc như deadline, amount, exception hoặc điều kiện eligibility, khiến generator không thể trả lời đủ. | So sánh gold contexts với retrieved chunks. Nếu Recall thấp cùng Completeness thấp, ưu tiên sửa query expansion, chunking hoặc retriever. |
+| Context Precision | Có thể thấp khi top-k cố ý rộng để tăng recall nhưng answer vẫn grounded và đầy đủ; đây là vấn đề ranking cần monitor, chưa chắc là blocker. | Chunks liên quan đứng rất muộn hoặc bị noise lấn át, làm model chọn nhầm evidence hoặc sinh câu trả lời sai. | Kiểm tra ranking và noise trong top-k; thử reranking, điều chỉnh top-k/chunking, đồng thời theo dõi Faithfulness và Completeness. |
+| Completeness | Có thể thấp nếu câu hỏi chỉ yêu cầu một phần thông tin, hoặc case adversarial cần từ chối thay vì cung cấp một expected answer dài; phải đối chiếu rubric và expected answer. | Bỏ sót thông tin bắt buộc như ngày, số tiền, điều kiện, ngoại lệ hoặc bước tiếp theo. | So sánh answer với expected answer theo từng claim. Nếu Context Recall cũng thấp thì sửa retrieval; nếu retrieval đủ mà Completeness thấp thì sửa generation/prompt. |
 
 ### Exercise 1.2 — Bias trong LLM-as-a-Judge
 
@@ -46,15 +46,15 @@ Ba bias thường gặp:
 
 **Câu 1: Thiết kế experiment phát hiện position bias với ít nhất hai conditions.**
 
-> *Câu trả lời:*
+> *Câu trả lời:* Dùng cùng một tập câu hỏi, cùng rubric và hai câu trả lời A/B có chất lượng đã được human xác định. Tạo hai conditions: (1) judge nhận A trước rồi B, (2) judge nhận B trước rồi A. Randomize thứ tự cho nhiều case và chạy mỗi case nhiều lần nếu có thể. So sánh score của cùng một answer ở hai vị trí, tỷ lệ judge chọn answer đứng trước và mức chênh lệch điểm giữa hai conditions. Nếu answer không đổi chất lượng nhưng thường được điểm cao hơn khi đứng trước, đó là position bias. Có thể giảm bias bằng cách randomize order, chấm cả hai thứ tự rồi lấy trung bình, và dùng nhiều judge độc lập.
 
 **Câu 2: Làm thế nào giảm verbosity bias bằng rubric design?**
 
-> *Câu trả lời:*
+> *Câu trả lời:* Rubric phải chấm theo các tiêu chí độc lập như correctness, coverage của required facts, evidence, relevance và actionability; không chấm độ dài như một proxy cho chất lượng. Ghi rõ rằng câu trả lời ngắn nhưng đủ ý, đúng policy và có evidence có thể đạt điểm 5, còn câu dài nhưng lặp ý, lan man hoặc thêm claim không có evidence phải bị trừ điểm. Có thể quy định answer chỉ cần chứa đủ các điều kiện/ngày/amount/exception liên quan và dùng một test pair gồm bản ngắn và bản dài có cùng nội dung để kiểm tra judge.
 
 **Câu 3: Tại sao cần calibrate LLM judge với human labels?**
 
-> *Câu trả lời:*
+> *Câu trả lời:* Human labels giúp kiểm tra judge có hiểu đúng rubric và có thiên lệch có hệ thống hay không. Calibration cho biết score của judge có tương quan với đánh giá của người thật, giúp phát hiện judge quá dễ, quá khắt khe, ưu tiên answer dài hoặc thích phong cách của chính model. Với các case mơ hồ, adversarial hoặc liên quan đến privacy/safety, human review còn cung cấp chuẩn tham chiếu để chỉnh rubric, threshold và quyết định case nào phải escalated.
 
 ### Exercise 1.3 — Evaluation trong CI/CD
 
@@ -62,13 +62,13 @@ Ba bias thường gặp:
 
 | Metric | Threshold | Lý do |
 |---|---:|---|
-| Faithfulness | | |
-| Answer Relevance | | |
-| Completeness | | |
+| Faithfulness | 0.85 | Student Services là domain policy; claim không có evidence có thể gây sai deadline, học phí hoặc quyền lợi. Score dưới ngưỡng cần block hoặc human-review. |
+| Answer Relevance | 0.80 | Answer phải giải quyết đúng intent của sinh viên, không chỉ chứa các từ trùng với question. Với out-of-scope/ambiguous cases cần kiểm tra failure type và safety behavior. |
+| Completeness | 0.80 | Cần giữ đủ ngày, amount, điều kiện, ngoại lệ và bước tiếp theo để câu trả lời có thể hành động được. |
 
 **Câu 2: Khi nào dùng offline evaluation, online evaluation và human review?**
 
-> *Câu trả lời:*
+> *Câu trả lời:* Dùng **offline evaluation** trên golden dataset ở mỗi pull request hoặc trước khi deploy khi thay prompt, model, retriever, chunking hay policy version. Nó nhanh, lặp lại được và phù hợp làm quality gate; cần block nếu Faithfulness hoặc các metric quan trọng giảm dưới threshold hay giảm quá 0.05 so với baseline. Dùng **online evaluation** sau khi phát hành để theo dõi traffic thật, drift, câu hỏi mới, latency, cost, user feedback và failure rate; online monitoring có thể alert hoặc rollback khi chất lượng suy giảm. Dùng **human review** cho các case high-stakes, ambiguous, adversarial, privacy/safety và để calibrate LLM judge. Chẩn đoán metric cũng cần phân biệt: Context Recall thấp cùng Completeness thấp thường chỉ ra retriever thiếu evidence; retrieval tốt nhưng Faithfulness thấp thường chỉ ra generator hallucination; Recall cao nhưng Precision thấp gợi ý ranking/noise.
 
 ---
 
