@@ -101,6 +101,12 @@ Full pipeline:
 - Nếu có `contexts`, tính và lưu thêm Context Recall và Context Precision.
 - Retrieval scores không làm thay đổi `overall_score()` và pass rule gốc.
 
+**Kết quả checkpoint Task 2:** Đã triển khai đủ 3 answer-side metrics, 2
+retrieval-side metrics và wiring trong `run_full_eval()`. Targeted tests đạt
+**15 passed** gồm 14 tests bắt buộc và 1 test bonus cho `rerank_by_overlap()`.
+Context Recall dùng union của các chunks; Context Precision dùng rank-aware
+Average Precision nên chunk liên quan đứng càng sớm thì điểm càng cao.
+
 ### Task 3 — LLMJudge
 
 - `score_response(question, answer, rubric)`
@@ -305,11 +311,22 @@ thay đổi Context Recall hay không.
 
 **Tại sao Recall dự kiến không đổi?**
 
-> *Câu trả lời:*
+> *Câu trả lời:* Reranking chỉ thay đổi thứ tự của các chunks đã retrieve, không
+> thêm hoặc xóa chunk nào. Context Recall được tính trên union của toàn bộ
+> chunks, nên tập token được dùng để đo coverage vẫn giữ nguyên. Vì vậy Recall
+> không đổi; chỉ Context Precision có thể tăng khi chunks liên quan được đưa lên
+> trước noise.
 
 **Khi nào reranking không đủ và cần sửa retriever/query/chunking?**
 
-> *Câu trả lời:*
+> *Câu trả lời:* Reranking không đủ khi evidence cần thiết không xuất hiện trong
+> tập chunks ban đầu, thể hiện qua Context Recall thấp; đổi thứ tự không thể tạo
+> ra evidence bị thiếu. Cũng cần sửa query hoặc query expansion khi câu hỏi dùng
+> từ đồng nghĩa/paraphrase khiến retriever không nhận diện đúng intent. Cần sửa
+> chunking khi evidence bị chia cắt, chunk quá lớn chứa nhiều noise, hoặc một
+> điều kiện/ngoại lệ nằm ở chunk khác không được lấy cùng. Trong các trường hợp
+> này nên cải thiện retriever, semantic search, metadata filtering hoặc cách
+> chia/chọn top-k trước khi áp dụng reranking.
 
 ---
 
